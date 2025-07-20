@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Feedback Analysis</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <h1>Product Feedback Analysis</h1>
+            <form id="feedback-form">
+                <label for="text">Enter Text:</label>
+                <textarea id="text" rows="4" placeholder="Enter feedback manually"></textarea>
+                
+                <label for="file-input">Or Upload a CSV File:</label>
+                <input type="file" id="file-input" accept=".csv">
+                
+                <button type="submit">Analyze</button>
+            </form>
+            
+            <div id="result">
+                <h2>Results:</h2>
+                <p><strong>Translated Text:</strong> <span id="translated-text"></span></p>
+                <p><strong>Summarized Text:</strong> <span id="summarized-text"></span></p>
+                <p><strong>Sentiment:</strong> <span id="sentiment"></span></p>
+                <p><strong>Polarity Score:</strong> <span id="polarity-score"></span></p>
+                <p><strong>Subjectivity:</strong> <span id="subjectivity"></span></p>
+                <p><strong>Product Feedback:</strong> <span id="product-feedback"></span></p>
+            </div>
+        </div>
+
+        <!-- Sidebar for displaying feedback history with timestamps -->
+        <div class="sidebar" id="history">
+            <h2>Feedback History</h2>
+            <ul id="history-list"></ul>
+        </div>
+
+        <!-- Bar Chart to Display Polarity Scores -->
+        <div>
+            <h2>Sentiment Polarity Scores</h2>
+            <canvas id="polarityChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const polarityScores = [];
+        const feedbackLabels = [];
+
+        document.getElementById("feedback-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            
+            const text = document.getElementById("text").value;
+            const fileInput = document.getElementById("file-input").files[0];
+            
+            if (!text && !fileInput) {
+                alert("Please enter text or upload a CSV file.");
+                return;
+            }
+            
+            if (fileInput) {
+                // Process CSV File
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const csvData = e.target.result;
+                    const rows = csvData.split("\n");
+                    rows.forEach((row, index) => {
+                        if (row.trim()) {
+                            analyzeText(row, index + 1);
+                        }
+                    });
+                };
+                reader.readAsText(fileInput);
+            } else {
+                // Analyze Manual Text Input
+                analyzeText(text, 1);
+            }
+        });
+
+        function analyzeText(text, entryNumber) {
+            fetch("/analyze", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display the latest result
+                document.getElementById("translated-text").innerText = data.translated_text;
+                document.getElementById("summarized-text").innerText = data.summarized_text;
+                document.getElementById("sentiment").innerText = data.sentiment;
+                document.getElementById("polarity-score").innerText = data.polarity_score;
+                document.getElementById("subjectivity").innerText = data.subjectivity;
+                document.getElementById("product-feedback").innerText = data.product_feedback;
+                
+                // Update history list with timestamp
+                const historyList = document.getElementById("history-list");
+                const listItem = document.createElement("li");
+                listItem.innerHTML = `<strong>Timestamp:</strong> ${data.timestamp}<br><strong>Feedback:</strong> ${data.product_feedback}`;
+                historyList.prepend(listItem);  // Adds latest entry at the top
+
+                // Update Chart
+                feedbackLabels.push(`Feedback ${entryNumber}`);
+                polarityScores.push(data.polarity_score);
+                updateChart();
+            })
+            .catch(error => console.error("Error:", error));
+        }
+
+        // Initialize Chart.js for polarity score visualization
+        const ctx = document.getElementById('polarityChart').getContext('2d');
+        const polarityChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: feedbackLabels,
+                datasets: [{
+                    label: 'Polarity Score',
+                    data: polarityScores,
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        min: -1
+                    }
+                }
+            }
+        });
+
+        function updateChart() {
+            polarityChart.update();
+        }
+    </script>
+</body>
+</html>
